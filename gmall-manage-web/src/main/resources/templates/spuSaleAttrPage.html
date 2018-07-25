@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en"  xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<!-----------------弹出框----------------------------->
+<div id="spuSaleAttr_dlg" class="easyui-dialog" title="编辑销售属性" style="width:500px;height:400px;"
+     closed="true"  data-options="iconCls:'icon-save',resizable:true,modal:false" buttons="#spuSaleAttrBtns" >
+    <br/><br/>
+    <!------------------从基本销售属性中选择------------->
+    销售属性：  <select name="saleAttr" id="saleAttrSelect"  class="easyui-combobox" data-options="valueField:'id',textField:'name',url:'baseSaleAttrList'" style="width:100px">  </select>
+    <br/><br/>
+
+    <!----------------销售属性值列表---------------------------->
+    <table id="spuSaleAttrValueDg" class="easyui-datagrid" title="销售属性值列表"
+           data-options="singleSelect:true,method:'get',toolbar:'#spuSaleAttrValueTootbar'" ></table>
+
+
+    <!----------------销售属性值列表工具栏----------------------->
+    <div id="spuSaleAttrValueTootbar" style="padding:5px;height:auto"  >
+        <div style="margin-bottom:5px">
+            <a href="#" id="spuSaleAttrValueAddBtn" class="easyui-linkbutton" iconCls="icon-add" onclick="addSpuSaleAttrValue()" plain="true">添加</a>
+            <a href="#" class="easyui-linkbutton" iconCls="icon-remove" plain="true" onclick="removeSpuSaleAttrValue()" >删除</a>
+        </div>
+    </div>
+
+
+    <div id="spuSaleAttrBtns">
+        <a href="#" class="easyui-linkbutton" onclick="saveSpuSaleAttr()">确 定</a>
+        <a href="#" class="easyui-linkbutton" onclick="javascript:$('#spuSaleAttr_dlg').dialog('close')">关 闭</a>
+    </div>
+</div>
+</body>
+<script type="text/javascript">
+    function initSpuSaleAttrDlg(spuId,spuSaleAttr){
+        //打开弹出框
+        $("#spuSaleAttr_dlg").dialog("open");
+
+        //初始化属性选择的下拉菜单
+        $('#saleAttrSelect').combobox('reset');
+        if(spuSaleAttr&&spuSaleAttr.saleAttrId){
+            $('#saleAttrSelect').combobox('select',spuSaleAttr.saleAttrId);
+        }
+        //初始化属性值表格
+        initSpuSaleAttrValueListDatagrid(spuId,spuSaleAttr);
+
+    }
+
+    function initSpuSaleAttrValueListDatagrid(spuId,spuSaleAttr){
+        /*spuSaleAttrValueDg的url为空，意味着清空数据*/
+        /*清空表格中的数据*/
+        var spuSaleAttrValueDg=$("#spuSaleAttrValueDg").datagrid({url:""});
+        //清空表格
+        spuSaleAttrValueDg.datagrid('loadData', { total: 0, rows: [] });
+        /**/
+        spuSaleAttrValueDg.datagrid({
+            columns:[[
+                /*跟实体类保持一致！*/
+                { field:'id',title:'销售属性值Id',width:'25%' },
+                { field:'saleAttrId',title:'销售属性Id',hidden:true},
+                { field:'saleAttrValueName',title:'销售属性值名称',width:'75%',
+                    editor: {
+                        type: 'validatebox', options: { required: true}  //必填项
+                    }
+                }
+            ]],
+            onDblClickRow: function (rowIndex, rowData) {
+                //双击开启编辑行
+                spuSaleAttrValueDg.datagrid("beginEdit", rowIndex);
+                //设定当失去焦点时,退出编辑状态
+                var saleAttrValueName = rowData.saleAttrValueName;
+                $("input.datagrid-editable-input").val(saleAttrValueName).bind("blur",function(evt){
+                    spuSaleAttrValueDg.datagrid('endEdit',rowIndex);
+                });
+            }
+        });
+
+        //加载数据 ，暂时存储数据的值！保持的时候，将数据保存成json对象。
+        // console.log("spuSaleAttr:"+ JSON.stringify(spuSaleAttr.saleAttrValueName));
+        if(spuSaleAttr&&spuSaleAttr.spuSaleAttrValueJson&&spuSaleAttr.spuSaleAttrValueJson!=''){
+            console.log("加载暂存");
+            /*存储销售属性值的json对象*/
+            spuSaleAttrValueDg.datagrid("loadData",spuSaleAttr.spuSaleAttrValueJson);
+        }
+    }
+    /*add空行*/
+    function addSpuSaleAttrValue() {
+        $('#spuSaleAttrValueDg').datagrid("appendRow",{id:'',name:''});
+    }
+    /*删除*/
+    function removeSpuSaleAttrValue() {
+        var datagrid=$('#spuSaleAttrValueDg');
+        //getSelected,返回第一个被选中的行，没有的话返回null
+        var row = datagrid.datagrid('getSelected');
+        if (row) {
+            //getRowIndex,返回指定行的索引号，该行的参数可以是一行记录或一个ID字段值
+            var rowIndex = datagrid.datagrid('getRowIndex', row);
+            //deleteRow,删除行
+            datagrid.datagrid('deleteRow', rowIndex);
+        }
+    }
+    /*确定*/
+    //页面保存数据的时候都是保存到缓存中，就是redis，redis中放的是对象，综合性能，还是就使用jsion
+    function saveSpuSaleAttr() {   //把表单的内容存入属性表格中，如果有相同的属性，则替换掉原来的
+        //getData ,返回加载完毕后的数据
+        var spuSaleAttrValueJson= $('#spuSaleAttrValueDg').datagrid('getData');
+        /*id*/
+        var saleAttrId=$('#saleAttrSelect').combobox("getValue");
+        /*值*/
+        var saleAttrName=$('#saleAttrSelect').combobox("getText");
+
+        /*spuInfoPage.html 中的销售属性数据表格*/
+        var rowIndex = $("#spuSaleAttrDg").datagrid("getRowIndex",saleAttrId);
+        //console 跳转到指定的页面
+        console.log("delete rowIndex:"+rowIndex);
+        /*如果rowIndex*/
+        if(rowIndex>=0){
+            /*说明之前添加过数据*/
+            $("#spuSaleAttrDg").datagrid("deleteRow",rowIndex);
+        }
+        /*新增数据*/
+        //  $('#spuSaleAttrValueDg').datagrid("appendRow",{id:'',name:''});
+        $("#spuSaleAttrDg").datagrid("appendRow",{saleAttrId:saleAttrId,saleAttrName:saleAttrName,spuSaleAttrValueJson:spuSaleAttrValueJson});
+
+        $("#spuSaleAttr_dlg").dialog("close");
+    }
+
+
+
+
+
+</script>
+
+</html>
